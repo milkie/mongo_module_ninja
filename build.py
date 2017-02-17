@@ -305,9 +305,17 @@ class NinjaFile(object):
 
         libdeps = []
         if tool in ('LINK', 'SHLINK'):
-            libdeps_objs = myEnv.subst('$_LIBDEPS',executor=n.executor)
-            n.executor.get_lvars()['_LIBDEPS'] = libdeps_objs # cache the result.
-            libdeps = libdeps_objs.split()
+            libdeps = myEnv.subst('$_LIBDEPS',executor=n.executor)
+            if self.globalEnv.ToolchainIs('msvc'):
+                # On windows we need to use $in_newline so the libdeps need to go in inputs.
+                # This works around the fixed-size 128KB buffer used to read each line...
+                cmd.replace('$in', '$in_newline')
+                sources = libdeps.split() + sources
+                libdeps = []
+                n.executor.get_lvars()['_LIBDEPS'] = '' # prevent expansion
+            else:
+                n.executor.get_lvars()['_LIBDEPS'] = libdeps # cache the result.
+                libdeps = libdeps.split()
 
         myVars = {}
 
@@ -323,7 +331,7 @@ class NinjaFile(object):
 
             mySubst = myEnv.subst(word, executor=n.executor)
 
-            if name in ('_LIBFLAGS', '_PDB', '_MSVC_OUTPUT_FLAG'):
+            if name in ('_LIBFLAGS', '_PDB', '_MSVC_OUTPUT_FLAG') and mySubst:
                 # These are never worth commoning since they are always different.
                 myVars[name] = mySubst
                 continue
